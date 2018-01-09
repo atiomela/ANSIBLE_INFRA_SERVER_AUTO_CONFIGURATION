@@ -1,0 +1,12 @@
+$TTL 86400
+@ IN SOA your_master_name.your_domain.your_extention.  root.your_domain.your_extention. (
+	2011071001	;Serial
+	3600		;Refresh
+	1800		;Retry
+	604800		;Expire
+	86400		;Minimum TTL
+)
+@ IN NS your_master_name.your_domain.your_extention.
+@ IN PTR your_domain.your_extention.
+your_master_name IN A your_master_ip
+100 IN PTR your_master_name.your_domain.your_extention.

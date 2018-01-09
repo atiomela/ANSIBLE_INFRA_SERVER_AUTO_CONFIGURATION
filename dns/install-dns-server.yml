@@ -1,0 +1,72 @@
+- hosts: SERVER
+  remote_user : root
+  vars:
+     dns_server_ip: "192.168.1.100" 
+     dns_server_name: "masterdns"
+     ip_range: "192.168.1.0/24" 
+     domain: "martinez"
+     extention: "augustin"
+     domain_name: "martinez.{{extention}}" 
+     domain_reverse_name: "1.168.192" 
+
+  tasks:
+    - name : Install bind package
+      yum: name=bind  state=latest 
+
+
+    - name : Push template file for config file /etc/named.conf
+      template:  src=named.conf  dest=/etc/named.conf force=yes  owner=root group=named mode=0640
+
+    - name : Add dns-server-ip in /etc/resolv.conf
+      lineinfile: path=/etc/named.conf  regexp='listen-on port'  line='listen-on port 53 { 127.0.0.1; {{dns_server_ip}}; };' 
+        
+    - name : add new domain name
+      lineinfile: path=/etc/named.conf   insertbefore='end_of_zone_declaration'  line='{{item.line_content}}'
+      with_items:
+         - { line_content: 'zone "{{ domain_name }}" IN {' }
+         - { line_content: '    type master;' }
+         - { line_content: '    file "/var/named/forward.{{domain}}";' }
+         - { line_content: '    allow-update { none; };' }
+         - { line_content: '};#\\' }
+         - { line_content: '    ' }
+
+
+    - name : Add new reverse domain name
+      lineinfile: path=/etc/named.conf   insertbefore='end_of_zone_declaration'  line='{{item.line_content}}'
+      with_items:
+         - { line_content: 'zone "{{domain_reverse_name}}.in-addr.arpa" IN {' }
+         - { line_content: '     type master;' }
+         - { line_content: '     file "/var/named/reverse.{{domain}}";' }
+         - { line_content: '     allow-update { none; };' }
+         - { line_content: '};# \\' }
+         - { line_content: '     ' }
+
+    - name : Push  forward template file /var/named/forward.{{domain}}
+      template: src=forward.template  dest=/var/named/forward.{{domain}} force=yes owner=named group=named mode=0640
+
+    - name : Push  reverse template file /var/named/reverse.{{domain}}
+      template: src=reverse.template  dest=/var/named/reverse.{{domain}} force=yes owner=named group=named mode=0640
+
+    - name : Edit forward template file 
+      lineinfile: path=/var/named/forward.{{domain}} regexp={{item.reg}} line={{item.line_content}}
+      with_items:
+         - { reg: 'IN SOA' ,  line_content: '@ IN SOA {{dns_server_name}}.{{domain}}.{{extention}}. root.{{domain}}.{{extention}}. (' }
+         - { reg: 'IN NS'  ,  line_content: '@       IN NS {{dns_server_name}}.{{domain}}.{{extention}}.'} 
+         - { reg: 'IN MX'  ,  line_content: '@       IN MX 10 {{dns_server_name}}.{{domain}}.{{extention}}.'}
+         - { reg: '@ IN A yourmasterip'   ,  line_content: '@ IN  A {{dns_server_ip}}'}
+         - { reg: 'yourmastername IN A yourmasterip' , line_content: '{{dns_server_name}} IN A {{dns_server_ip}}'}
+
+
+    - name : Edit reverse  template file
+      lineinfile: path=/var/named/reverse.{{domain}} regexp={{item.reg}} line={{item.line_content}}
+      with_items:
+         - { reg: 'IN SOA' ,  line_content:  '@ IN SOA {{dns_server_name}}.{{domain}}.{{extention}}. root.{{domain}}.{{extention}}. (' }
+         - { reg: 'IN NS'  ,  line_content:  '@       IN NS {{dns_server_name}}.{{domain}}.{{extention}}.'}
+         - { reg: '@ IN PTR your_domain.your_extention.' ,  line_content:  '@       IN PTR          {{domain_name}}.'}
+         - { reg: 'your_master_name IN A your_master_ip'   ,  line_content: '{{dns_server_name}}        IN A  {{dns_server_ip}}'}
+         - { reg: '100 IN PTR your_master_name.your_domain.your_extention' , line_content: '100     IN PTR          {{dns_server_name}}.{{domain}}.{{extention}}.'}
+
+
+
+
+
